@@ -1,13 +1,262 @@
+<?php
+/* ============================================
+   LOGIN.PHP - Halaman Login E-Ticketing Ferry
+   Logic login sepenuhnya via PHP + MySQL
+   ============================================ */
+
+session_start();
+
+/* Jika sudah login, langsung redirect ke halaman utama */
+if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+    header('Location: index.php');
+    exit;
+    echo password_hash('password123', PASSWORD_DEFAULT);
+}
+
+/* Cek parameter dari halaman registrasi */
+$registered   = isset($_GET['registered']) && $_GET['registered'] === 'true';
+$emailFromReg = isset($_GET['email']) ? htmlspecialchars(urldecode($_GET['email'])) : '';
+?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
+    <!-- Meta tags untuk responsif dan SEO -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <meta name="description" content="Login E-Ticketing - Masuk ke akun Anda">
+    <title>Login - E-Ticketing Ferry</title>
+
+    <!-- Font Google - Poppins untuk modern look -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome untuk icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <h1>Belajar JavaScript</h1>
 
-    <script src="main.js"></script>
+    <!-- LOGIN CONTAINER - Container utama login -->
+    <div class="login-container">
+
+        <!-- Logo Section -->
+        <div class="logo-section">
+            <!-- Logo - Ganti URL di sini jika ingin ubah logo -->
+            <img src="https://customer-assets.emergentagent.com/job_79acb0b1-2184-4e65-9864-c3596fafe879/artifacts/l30lswab_logo.png" alt="E-Ticketing Logo" class="logo-img">
+            <h1>Selamat Datang</h1>
+            <p>Masuk ke akun E-Ticketing Anda</p>
+        </div>
+
+        <!-- Alert messages - Pesan sukses atau error -->
+        <div class="alert alert-success" id="alertSuccess">
+            <i class="fas fa-check-circle"></i>
+            <span id="successMessage"></span>
+        </div>
+
+        <div class="alert alert-error" id="alertError">
+            <i class="fas fa-exclamation-circle"></i>
+            <span id="errorMessage"></span>
+        </div>
+
+        <!-- Login Form -->
+        <form class="login-form" id="loginForm">
+            <!-- Email Input -->
+            <div class="form-group">
+                <label for="email">Email</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-envelope"></i>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        placeholder="nama@email.com"
+                        value="<?php echo $emailFromReg; ?>"
+                        required
+                    >
+                </div>
+                <span class="error-message" id="emailError">Email tidak valid</span>
+            </div>
+
+            <!-- Password Input -->
+            <div class="form-group">
+                <label for="password">Password</label>
+                <div class="input-wrapper">
+                    <i class="fas fa-lock"></i>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Masukkan password"
+                        required
+                    >
+                    <!-- Toggle show/hide password -->
+                    <i class="fas fa-eye password-toggle" id="togglePassword"></i>
+                </div>
+                <span class="error-message" id="passwordError">Password minimal 6 karakter</span>
+            </div>
+
+            <!-- Forgot Password Link -->
+            <div class="forgot-password">
+                <a href="#">Lupa password?</a>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="btn-submit" id="btnSubmit">
+                <span class="spinner"></span>
+                <span class="btn-text">Masuk</span>
+                <i class="fas fa-arrow-right"></i>
+            </button>
+        </form>
+
+        <!-- Divider -->
+        <div class="divider">
+            <span>atau</span>
+        </div>
+
+        <!-- Register Link -->
+        <div class="register-link">
+            Belum punya akun? <a href="register.php">Daftar Sekarang</a>
+        </div>
+
+    </div><!-- /.login-container -->
+
+<script>
+    /* ============================================
+       INITIALIZATION - Panggil setup saat DOM siap
+       ============================================ */
+    document.addEventListener('DOMContentLoaded', function () {
+        setupEventListeners();
+
+        /* Tampilkan pesan sukses jika baru selesai registrasi */
+        <?php if ($registered && $emailFromReg): ?>
+        showSuccess('Registrasi berhasil! Silakan login dengan akun Anda.');
+        <?php endif; ?>
+    });
+
+    function setupEventListeners() {
+        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+        document.getElementById('togglePassword').addEventListener('click', togglePassword);
+        document.getElementById('email').addEventListener('blur', validateEmail);
+        document.getElementById('password').addEventListener('blur', validatePassword);
+
+        document.getElementById('email').addEventListener('input', function () {
+            clearError('email');
+        });
+        document.getElementById('password').addEventListener('input', function () {
+            clearError('password');
+        });
+    }
+
+    async function handleLogin(e) {
+        e.preventDefault();
+
+        if (!validateEmail() || !validatePassword()) return;
+
+        const email     = document.getElementById('email').value.trim();
+        const password  = document.getElementById('password').value;
+        const btnSubmit = document.getElementById('btnSubmit');
+
+        btnSubmit.classList.add('loading');
+
+        try {
+            const formData = new FormData();
+            formData.append('email', email);
+            formData.append('password', password);
+
+            const response = await fetch('process_login.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            btnSubmit.classList.remove('loading');
+
+            if (data.status === 'success') {
+                showSuccess(data.message);
+                setTimeout(function () {
+                    window.location.href = data.redirect || 'index.php';
+                }, 1500);
+            } else {
+                showError(data.message || 'Email atau password salah!');
+                const container = document.querySelector('.login-container');
+                container.style.animation = 'shake 0.5s';
+                setTimeout(function () { container.style.animation = ''; }, 500);
+            }
+
+        } catch (err) {
+            btnSubmit.classList.remove('loading');
+            showError('Terjadi kesalahan. Silakan coba lagi.');
+            console.error('Login error:', err);
+        }
+    }
+
+    function validateEmail() {
+        const email      = document.getElementById('email').value.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!email) { showFieldError('email', 'Email tidak boleh kosong'); return false; }
+        if (!emailRegex.test(email)) { showFieldError('email', 'Format email tidak valid'); return false; }
+        clearError('email');
+        return true;
+    }
+
+    function validatePassword() {
+        const password = document.getElementById('password').value;
+
+        if (!password) { showFieldError('password', 'Password tidak boleh kosong'); return false; }
+        if (password.length < 6) { showFieldError('password', 'Password minimal 6 karakter'); return false; }
+        clearError('password');
+        return true;
+    }
+
+    function showFieldError(fieldName, message) {
+        document.getElementById(fieldName).classList.add('error');
+        const el = document.getElementById(fieldName + 'Error');
+        el.textContent = message;
+        el.classList.add('show');
+    }
+
+    function clearError(fieldName) {
+        document.getElementById(fieldName).classList.remove('error');
+        document.getElementById(fieldName + 'Error').classList.remove('show');
+    }
+
+    function showError(message) {
+        const alertError = document.getElementById('alertError');
+        document.getElementById('errorMessage').textContent = message;
+        alertError.classList.add('show');
+        setTimeout(function () { alertError.classList.remove('show'); }, 5000);
+    }
+
+    function showSuccess(message) {
+        const alertSuccess = document.getElementById('alertSuccess');
+        document.getElementById('successMessage').textContent = message;
+        alertSuccess.classList.add('show');
+        setTimeout(function () { alertSuccess.classList.remove('show'); }, 5000);
+    }
+
+    function togglePassword() {
+        const passwordInput = document.getElementById('password');
+        const toggleIcon    = document.getElementById('togglePassword');
+
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleIcon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+            passwordInput.type = 'password';
+            toggleIcon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+            20%, 40%, 60%, 80% { transform: translateX(10px); }
+        }
+    `;
+    document.head.appendChild(style);
+</script>
+
 </body>
 </html>
