@@ -23,20 +23,31 @@ html {
     text-size-adjust: 100%;
 }
 
+/* HTML wrapper - pastikan body boleh discroll penuh */
+html {
+    height: 100%;
+}
+
 /* Body styling */
 body {
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-    /* dvh lebih akurat di mobile (menghindari salah hitung tinggi akibat address bar),
-       dengan fallback ke vh untuk browser lama */
+    /* min-height (bukan height tetap) supaya body boleh membesar & discroll
+       kalau kontennya lebih tinggi dari layar */
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    /* Sengaja TIDAK pakai align-items/justify-content: center di sini.
+       Kalau dipakai, ada bug klasik flexbox: saat konten lebih tinggi
+       dari layar, bagian ATAS jadi ikut "kepotong" dan tidak bisa
+       discroll ke atas. Centering dipindah ke margin:auto pada
+       .login-container (lihat di bawah) yang aman dari bug tsb. */
     padding: clamp(12px, 4vw, 20px);
     position: relative;
+    /* Boleh discroll vertikal, tapi tetap dikunci horizontal
+       supaya lingkaran dekorasi tidak memicu scroll ke samping */
     overflow-x: hidden;
+    overflow-y: auto;
 }
 
 /* Background animated circles - Lingkaran animasi di background */
@@ -91,9 +102,9 @@ body::after {
     max-width: 450px;
     /* Padding fleksibel: menyempit otomatis di layar kecil, tidak pernah terlalu mepet */
     padding: clamp(24px, 6vw, 50px) clamp(20px, 5vw, 40px);
-    /* Batasi tinggi di layar pendek (misal HP landscape) agar tetap bisa discroll */
-    max-height: calc(100dvh - 24px);
-    overflow-y: auto;
+    /* Tidak dibatasi max-height lagi — biarkan tinggi mengikuti konten,
+       kalau lebih tinggi dari layar maka BODY yang discroll (lihat scroll di body) */
+    margin: auto; /* trik centering aman: otomatis rapi ke atas + full scroll saat konten > layar */
     position: relative;
     z-index: 1;
     animation: slideUp 0.6s ease;
@@ -513,7 +524,6 @@ body::after {
 
     .login-container {
         padding: 20px 24px;
-        max-height: none;
     }
 
     .logo-img {
