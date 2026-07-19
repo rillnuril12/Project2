@@ -1,0 +1,542 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Root variables - Warna yang digunakan */
+:root {
+    --primary-color: #0a2540;      /* Navy blue dari logo */
+    --secondary-color: #0d6eac;    /* Teal blue dari logo */
+    --accent-color: #1a8cd8;       /* Light blue untuk aksen */
+    --white: #ffffff;
+    --light-gray: #f8f9fa;
+    --gray: #6c757d;
+    --dark-gray: #343a40;
+    --danger: #dc3545;
+    --success: #28a745;
+}
+
+html {
+    /* Mencegah font auto-zoom aneh di beberapa browser mobile */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+/* Body styling */
+body {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    /* dvh lebih akurat di mobile (menghindari salah hitung tinggi akibat address bar),
+       dengan fallback ke vh untuk browser lama */
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(12px, 4vw, 20px);
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Background animated circles - Lingkaran animasi di background */
+body::before,
+body::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    animation: float 20s infinite ease-in-out;
+    pointer-events: none;
+}
+
+body::before {
+    width: min(500px, 70vw);
+    height: min(500px, 70vw);
+    top: -25vw;
+    left: -25vw;
+    animation-delay: 0s;
+}
+
+body::after {
+    width: min(400px, 60vw);
+    height: min(400px, 60vw);
+    bottom: -20vw;
+    right: -20vw;
+    animation-delay: 5s;
+}
+
+/* Animasi floating untuk circles */
+@keyframes float {
+    0%, 100% {
+        transform: translate(0, 0) scale(1);
+    }
+    33% {
+        transform: translate(50px, -50px) scale(1.1);
+    }
+    66% {
+        transform: translate(-30px, 30px) scale(0.9);
+    }
+}
+
+/* ============================================
+   LOGIN CONTAINER - Container utama login
+   ============================================ */
+
+.login-container {
+    background: var(--white);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 450px;
+    /* Padding fleksibel: menyempit otomatis di layar kecil, tidak pernah terlalu mepet */
+    padding: clamp(24px, 6vw, 50px) clamp(20px, 5vw, 40px);
+    /* Batasi tinggi di layar pendek (misal HP landscape) agar tetap bisa discroll */
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    position: relative;
+    z-index: 1;
+    animation: slideUp 0.6s ease;
+}
+
+/* Animasi slide up */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   LOGO SECTION - Bagian logo
+   ============================================ */
+
+.logo-section {
+    text-align: center;
+    margin-bottom: clamp(24px, 5vw, 40px);
+}
+
+.logo-img {
+    height: clamp(50px, 12vw, 80px); /* Ukuran logo menyesuaikan lebar layar */
+    width: auto;
+    max-width: 100%;
+    margin-bottom: 20px;
+    animation: fadeIn 0.8s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.logo-section h1 {
+    font-size: clamp(1.35rem, 4vw, 2rem);
+    color: var(--primary-color);
+    margin-bottom: 10px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.logo-section p {
+    color: var(--gray);
+    font-size: clamp(0.85rem, 2.2vw, 0.95rem);
+}
+
+/* ============================================
+   FORM STYLES - Style untuk form login
+   ============================================ */
+
+.login-form {
+    margin-top: clamp(20px, 4vw, 30px);
+}
+
+/* Form group untuk setiap input */
+.form-group {
+    margin-bottom: clamp(18px, 4vw, 25px);
+    position: relative;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--dark-gray);
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+/* Input wrapper untuk icon di dalamnya */
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-wrapper i {
+    position: absolute;
+    left: 15px;
+    color: var(--secondary-color);
+    font-size: 1.1rem;
+    pointer-events: none;
+}
+
+/* --- Perbaikan posisi icon mata (show/hide password) --- */
+.input-wrapper input {
+    padding-right: 45px; /* cukup untuk icon di sisi kanan */
+}
+
+/* Posisikan icon mata di ujung kanan input */
+.input-wrapper .password-toggle {
+    position: absolute;
+    right: 15px;         /* tempel di sisi kanan input */
+    left: auto;          /* pastikan tidak ikut aturan kiri */
+    color: var(--gray);
+    cursor: pointer;
+    transition: color 0.3s ease;
+    font-size: 1.1rem;
+    pointer-events: auto;
+}
+
+/* Efek hover tetap sama */
+.input-wrapper .password-toggle:hover {
+    color: var(--secondary-color);
+}
+
+/* Input field styling */
+.form-group input {
+    width: 100%;
+    padding: 14px 15px 14px 45px; /* Extra padding kiri untuk icon */
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    /* Minimal 16px agar Safari/iOS tidak auto-zoom saat fokus input di HP */
+    font-size: 16px;
+    font-family: inherit;
+    transition: all 0.3s ease;
+    background: var(--light-gray);
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Focus state untuk input */
+.form-group input:focus {
+    outline: none;
+    border-color: var(--secondary-color);
+    background: var(--white);
+    box-shadow: 0 0 0 4px rgba(13, 110, 172, 0.1);
+}
+
+/* Input error state */
+.form-group input.error {
+    border-color: var(--danger);
+}
+
+/* Error message */
+.error-message {
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin-top: 5px;
+    display: none;
+}
+
+.error-message.show {
+    display: block;
+}
+
+/* ============================================
+   FORGOT PASSWORD LINK
+   ============================================ */
+
+.forgot-password {
+    text-align: right;
+    margin-top: -10px;
+    margin-bottom: clamp(18px, 4vw, 25px);
+}
+
+.forgot-password a {
+    color: var(--secondary-color);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.forgot-password a:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+/* ============================================
+   SUBMIT BUTTON - Tombol login
+   ============================================ */
+
+.btn-submit {
+    width: 100%;
+    background: linear-gradient(135deg, var(--secondary-color) 0%, var(--accent-color) 100%);
+    color: var(--white);
+    border: none;
+    padding: 15px;
+    font-size: clamp(0.95rem, 2.5vw, 1.1rem);
+    font-weight: 600;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(13, 110, 172, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    /* Area tap minimal 44px sesuai standar aksesibilitas mobile */
+    min-height: 48px;
+}
+
+.btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(13, 110, 172, 0.4);
+}
+
+.btn-submit:active {
+    transform: translateY(0);
+}
+
+/* Loading state untuk button */
+.btn-submit.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.btn-submit .spinner {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: var(--white);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+.btn-submit.loading .spinner {
+    display: block;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ============================================
+   DIVIDER - Garis pembatas "atau"
+   ============================================ */
+
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: clamp(20px, 5vw, 30px) 0;
+    color: var(--gray);
+    font-size: 0.9rem;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.divider span {
+    padding: 0 15px;
+}
+
+/* ============================================
+   REGISTER LINK - Link ke halaman daftar
+   ============================================ */
+
+.register-link {
+    text-align: center;
+    margin-top: clamp(18px, 4vw, 25px);
+    color: var(--gray);
+    font-size: 0.9rem;
+}
+
+.register-link a {
+    color: var(--secondary-color);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.3s ease;
+}
+
+.register-link a:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+/* ============================================
+   BACK TO HOME - Link kembali ke home
+   ============================================ */
+
+.back-home {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.back-home a {
+    color: var(--white);
+    text-decoration: none;
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.back-home a:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateX(-5px);
+}
+
+/* ============================================
+   ALERT MESSAGES - Pesan sukses/error
+   ============================================ */
+
+.alert {
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    animation: slideDown 0.3s ease;
+    font-size: 0.9rem;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.alert.show {
+    display: flex;
+}
+
+.alert-success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.alert-error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN - Media queries tambahan
+   (clamp() di atas sudah menangani sebagian besar
+   skala, media query ini hanya untuk penyesuaian
+   layout/spacing di breakpoint kritis)
+   ============================================ */
+
+/* Tablet ke bawah */
+@media (max-width: 768px) {
+    .login-container {
+        border-radius: 16px;
+    }
+}
+
+/* HP besar */
+@media (max-width: 480px) {
+    body {
+        align-items: flex-start;
+        padding-top: clamp(20px, 6vw, 40px);
+    }
+
+    .login-container {
+        border-radius: 14px;
+    }
+
+    .forgot-password {
+        margin-top: -6px;
+    }
+}
+
+/* HP kecil (contoh: iPhone SE, layar < 360px) */
+@media (max-width: 360px) {
+    .login-container {
+        padding: 20px 16px;
+        border-radius: 12px;
+    }
+
+    .logo-section {
+        margin-bottom: 20px;
+    }
+
+    .form-group input {
+        padding: 12px 12px 12px 40px;
+    }
+
+    .input-wrapper i {
+        left: 12px;
+        font-size: 1rem;
+    }
+
+    .input-wrapper .password-toggle {
+        right: 12px;
+    }
+}
+
+/* Layar pendek / mode landscape di HP */
+@media (max-height: 500px) and (orientation: landscape) {
+    body {
+        align-items: flex-start;
+        padding: 12px;
+    }
+
+    .login-container {
+        padding: 20px 24px;
+        max-height: none;
+    }
+
+    .logo-img {
+        height: 40px;
+        margin-bottom: 10px;
+    }
+
+    .logo-section {
+        margin-bottom: 16px;
+    }
+
+    .login-form {
+        margin-top: 12px;
+    }
+
+    .form-group {
+        margin-bottom: 14px;
+    }
+}
+
+/* Layar besar (desktop/laptop lebar) */
+@media (min-width: 1440px) {
+    .login-container {
+        max-width: 480px;
+    }
+}
