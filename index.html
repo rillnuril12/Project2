@@ -1,262 +1,197 @@
 <?php
-/* ============================================
-   LOGIN.PHP - Halaman Login E-Ticketing Ferry
-   Logic login sepenuhnya via PHP + MySQL
-   ============================================ */
+/* ============================================================
+   UPLOAD-PEMBAYARAN.PHP
+   - Validasi & simpan bukti pembayaran
+   - Update status pesanan → 'menunggu_verifikasi'
+   - Kirim notifikasi email ke admin
+   ============================================================ */
 
 session_start();
+require_once 'config.php';
 
-/* Jika sudah login, langsung redirect ke halaman utama */
-if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-    header('Location: index.php');
+/* ── Cek login ── */
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+    header("Location: login.php");
     exit;
-    echo password_hash('password123', PASSWORD_DEFAULT);
 }
 
-/* Cek parameter dari halaman registrasi */
-$registered   = isset($_GET['registered']) && $_GET['registered'] === 'true';
-$emailFromReg = isset($_GET['email']) ? htmlspecialchars(urldecode($_GET['email'])) : '';
+$user_id   = $_SESSION['user_id'];
+$user_nama = $_SESSION['user_nama'];
+
+/* ── Hanya terima POST ── */
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header("Location: index.php");
+    exit;
+}
+
+$kode_pesan = trim($_POST['kode_pesan'] ?? '');
+
+if (empty($kode_pesan)) {
+    header("Location: index.php?error=kode_tidak_ditemukan");
+    exit;
+}
+
+/* ── Ambil data pesanan milik user ini ── */
+$stmt = $conn->prepare("
+    SELECT p.*, u.email, u.nama AS nama_user
+    FROM pesanan p
+    JOIN users u ON p.user_id = u.id
+    WHERE p.kode_pesan = ? AND p.user_id = ?
+    LIMIT 1
+");
+$stmt->bind_param("si", $kode_pesan, $user_id);
+$stmt->execute();
+$pesanan = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if (!$pesanan) {
+    header("Location: index.php?error=pesanan_tidak_ditemukan");
+    exit;
+}
+
+if ($pesanan['status'] !== 'pending') {
+    header("Location: proses-pembayaran.php?kode=$kode_pesan&error=status_tidak_valid");
+    exit;
+}
+
+/* ── Validasi file upload ── */
+if (!isset($_FILES['bukti']) || $_FILES['bukti']['error'] !== UPLOAD_ERR_OK) {
+    header("Location: proses-pembayaran.php?kode=$kode_pesan&error=file_gagal");
+    exit;
+}
+
+$file       = $_FILES['bukti'];
+$ukuranMaks = 5 * 1024 * 1024; // 5 MB
+$eksOke     = ['jpg', 'jpeg', 'png', 'pdf'];
+$mimeOke    = ['image/jpeg', 'image/png', 'application/pdf'];
+
+$eksFile  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+$mimeFile = mime_content_type($file['tmp_name']);
+
+if ($file['size'] > $ukuranMaks) {
+    header("Location: proses-pembayaran.php?kode=$kode_pesan&error=file_terlalu_besar");
+    exit;
+}
+
+if (!in_array($eksFile, $eksOke) || !in_array($mimeFile, $mimeOke)) {
+    header("Location: proses-pembayaran.php?kode=$kode_pesan&error=format_tidak_valid");
+    exit;
+}
+
+/* ── Simpan file ── */
+$uploadDir = 'uploads/bukti/';
+if (!is_dir($uploadDir)) {
+    mkdir($uploadDir, 0755, true);
+}
+
+$namaFile = 'bukti_' . $kode_pesan . '_' . time() . '.' . $eksFile;
+$pathFile = $uploadDir . $namaFile;
+
+if (!move_uploaded_file($file['tmp_name'], $pathFile)) {
+    header("Location: proses-pembayaran.php?kode=$kode_pesan&error=upload_gagal");
+    exit;
+}
+
+/* ── Update DB: status + path bukti ── */
+$stmtUpd = $conn->prepare("
+    UPDATE pesanan
+    SET status = 'menunggu_verifikasi',
+        bukti_bayar = ?,
+        updated_at  = NOW()
+    WHERE kode_pesan = ? AND user_id = ?
+");
+$stmtUpd->bind_param("ssi", $namaFile, $kode_pesan, $user_id);
+$stmtUpd->execute();
+$stmtUpd->close();
+
+/* ── Kirim email notifikasi ke ADMIN ── */
+kirimEmailAdmin($pesanan, $namaFile);
+
+/* ── Redirect ke halaman sukses ── */
+header("Location: pembayaran-sukses.php?kode=$kode_pesan");
+exit;
+
+/* ============================================================
+   FUNGSI: Kirim email notifikasi ke admin
+   ============================================================ */
+function kirimEmailAdmin(array $pesanan, string $namaFile): void
+{
+    $adminEmail = ADMIN_EMAIL; // didefinisikan di config.php
+
+    $subject = "[E-Ticketing] Bukti Pembayaran Baru - {$pesanan['kode_pesan']}";
+
+    $pesan = "
+    <html>
+    <head>
+        <meta charset='UTF-8'>
+        <style>
+            body  { font-family: Arial, sans-serif; color: #333; }
+            .box  { max-width: 560px; margin: 0 auto; border: 1px solid #ddd;
+                    border-radius: 10px; overflow: hidden; }
+            .head { background: #1e3a5f; color: #fff; padding: 20px 24px; }
+            .body { padding: 24px; }
+            .row  { margin-bottom: 12px; }
+            .lbl  { font-size: 11px; color: #777; text-transform: uppercase; }
+            .val  { font-size: 15px; font-weight: 600; }
+            .foot { background: #f8fafc; padding: 14px 24px;
+                    font-size: 12px; color: #888; text-align: center; }
+            .btn  { display: inline-block; margin-top: 18px;
+                    background: #1e3a5f; color: #fff; padding: 11px 26px;
+                    border-radius: 8px; text-decoration: none; font-weight: 600; }
+        </style>
+    </head>
+    <body>
+    <div class='box'>
+        <div class='head'>
+            <h2 style='margin:0;font-size:18px;'>&#128179; Bukti Pembayaran Masuk</h2>
+        </div>
+        <div class='body'>
+            <p>Halo Admin,<br>
+               Pengguna berikut telah mengupload bukti pembayaran dan menunggu verifikasi:</p>
+
+            <div class='row'>
+                <div class='lbl'>Kode Booking</div>
+                <div class='val'>{$pesanan['kode_pesan']}</div>
+            </div>
+            <div class='row'>
+                <div class='lbl'>Nama Pengguna</div>
+                <div class='val'>{$pesanan['nama_user']}</div>
+            </div>
+            <div class='row'>
+                <div class='lbl'>Email Pengguna</div>
+                <div class='val'>{$pesanan['email']}</div>
+            </div>
+            <div class='row'>
+                <div class='lbl'>Rute</div>
+                <div class='val'>{$pesanan['departure']} &rarr; {$pesanan['destination']}</div>
+            </div>
+            <div class='row'>
+                <div class='lbl'>Tanggal Keberangkatan</div>
+                <div class='val'>{$pesanan['tanggal']}</div>
+            </div>
+            <div class='row'>
+                <div class='lbl'>Total Pembayaran</div>
+                <div class='val'>Rp " . number_format($pesanan['harga_total'], 0, ',', '.') . "</div>
+            </div>
+            <div class='row'>
+                <div class='lbl'>File Bukti</div>
+                <div class='val'>{$namaFile}</div>
+            </div>
+
+            <a href='" . SITE_URL . "/admin/dashboard-admin.php' class='btn'>
+                Buka Dashboard Admin
+            </a>
+        </div>
+        <div class='foot'>E-Ticketing Ferry &mdash; Sistem otomatis, harap tidak membalas email ini.</div>
+    </div>
+    </body>
+    </html>";
+
+    $headers  = "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $headers .= "From: E-Ticketing <no-reply@e-ticketing.com>\r\n";
+    $headers .= "X-Mailer: PHP/" . phpversion();
+
+    mail($adminEmail, $subject, $pesan, $headers);
+}
 ?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <!-- Meta tags untuk responsif dan SEO -->
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Login E-Ticketing - Masuk ke akun Anda">
-    <title>Login - E-Ticketing Ferry</title>
-
-    <!-- Font Google - Poppins untuk modern look -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Font Awesome untuk icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/styles.css">
-</head>
-<body>
-
-    <!-- LOGIN CONTAINER - Container utama login -->
-    <div class="login-container">
-
-        <!-- Logo Section -->
-        <div class="logo-section">
-            <!-- Logo - Ganti URL di sini jika ingin ubah logo -->
-            <img src="https://customer-assets.emergentagent.com/job_79acb0b1-2184-4e65-9864-c3596fafe879/artifacts/l30lswab_logo.png" alt="E-Ticketing Logo" class="logo-img">
-            <h1>Selamat Datang</h1>
-            <p>Masuk ke akun E-Ticketing Anda</p>
-        </div>
-
-        <!-- Alert messages - Pesan sukses atau error -->
-        <div class="alert alert-success" id="alertSuccess">
-            <i class="fas fa-check-circle"></i>
-            <span id="successMessage"></span>
-        </div>
-
-        <div class="alert alert-error" id="alertError">
-            <i class="fas fa-exclamation-circle"></i>
-            <span id="errorMessage"></span>
-        </div>
-
-        <!-- Login Form -->
-        <form class="login-form" id="loginForm">
-            <!-- Email Input -->
-            <div class="form-group">
-                <label for="email">Email</label>
-                <div class="input-wrapper">
-                    <i class="fas fa-envelope"></i>
-                    <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        placeholder="nama@email.com"
-                        value="<?php echo $emailFromReg; ?>"
-                        required
-                    >
-                </div>
-                <span class="error-message" id="emailError">Email tidak valid</span>
-            </div>
-
-            <!-- Password Input -->
-            <div class="form-group">
-                <label for="password">Password</label>
-                <div class="input-wrapper">
-                    <i class="fas fa-lock"></i>
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        placeholder="Masukkan password"
-                        required
-                    >
-                    <!-- Toggle show/hide password -->
-                    <i class="fas fa-eye password-toggle" id="togglePassword"></i>
-                </div>
-                <span class="error-message" id="passwordError">Password minimal 6 karakter</span>
-            </div>
-
-            <!-- Forgot Password Link -->
-            <div class="forgot-password">
-                <a href="#">Lupa password?</a>
-            </div>
-
-            <!-- Submit Button -->
-            <button type="submit" class="btn-submit" id="btnSubmit">
-                <span class="spinner"></span>
-                <span class="btn-text">Masuk</span>
-                <i class="fas fa-arrow-right"></i>
-            </button>
-        </form>
-
-        <!-- Divider -->
-        <div class="divider">
-            <span>atau</span>
-        </div>
-
-        <!-- Register Link -->
-        <div class="register-link">
-            Belum punya akun? <a href="register.php">Daftar Sekarang</a>
-        </div>
-
-    </div><!-- /.login-container -->
-
-<script>
-    /* ============================================
-       INITIALIZATION - Panggil setup saat DOM siap
-       ============================================ */
-    document.addEventListener('DOMContentLoaded', function () {
-        setupEventListeners();
-
-        /* Tampilkan pesan sukses jika baru selesai registrasi */
-        <?php if ($registered && $emailFromReg): ?>
-        showSuccess('Registrasi berhasil! Silakan login dengan akun Anda.');
-        <?php endif; ?>
-    });
-
-    function setupEventListeners() {
-        document.getElementById('loginForm').addEventListener('submit', handleLogin);
-        document.getElementById('togglePassword').addEventListener('click', togglePassword);
-        document.getElementById('email').addEventListener('blur', validateEmail);
-        document.getElementById('password').addEventListener('blur', validatePassword);
-
-        document.getElementById('email').addEventListener('input', function () {
-            clearError('email');
-        });
-        document.getElementById('password').addEventListener('input', function () {
-            clearError('password');
-        });
-    }
-
-    async function handleLogin(e) {
-        e.preventDefault();
-
-        if (!validateEmail() || !validatePassword()) return;
-
-        const email     = document.getElementById('email').value.trim();
-        const password  = document.getElementById('password').value;
-        const btnSubmit = document.getElementById('btnSubmit');
-
-        btnSubmit.classList.add('loading');
-
-        try {
-            const formData = new FormData();
-            formData.append('email', email);
-            formData.append('password', password);
-
-            const response = await fetch('process_login.php', {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-            btnSubmit.classList.remove('loading');
-
-            if (data.status === 'success') {
-                showSuccess(data.message);
-                setTimeout(function () {
-                    window.location.href = data.redirect || 'index.php';
-                }, 1500);
-            } else {
-                showError(data.message || 'Email atau password salah!');
-                const container = document.querySelector('.login-container');
-                container.style.animation = 'shake 0.5s';
-                setTimeout(function () { container.style.animation = ''; }, 500);
-            }
-
-        } catch (err) {
-            btnSubmit.classList.remove('loading');
-            showError('Terjadi kesalahan. Silakan coba lagi.');
-            console.error('Login error:', err);
-        }
-    }
-
-    function validateEmail() {
-        const email      = document.getElementById('email').value.trim();
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        if (!email) { showFieldError('email', 'Email tidak boleh kosong'); return false; }
-        if (!emailRegex.test(email)) { showFieldError('email', 'Format email tidak valid'); return false; }
-        clearError('email');
-        return true;
-    }
-
-    function validatePassword() {
-        const password = document.getElementById('password').value;
-
-        if (!password) { showFieldError('password', 'Password tidak boleh kosong'); return false; }
-        if (password.length < 6) { showFieldError('password', 'Password minimal 6 karakter'); return false; }
-        clearError('password');
-        return true;
-    }
-
-    function showFieldError(fieldName, message) {
-        document.getElementById(fieldName).classList.add('error');
-        const el = document.getElementById(fieldName + 'Error');
-        el.textContent = message;
-        el.classList.add('show');
-    }
-
-    function clearError(fieldName) {
-        document.getElementById(fieldName).classList.remove('error');
-        document.getElementById(fieldName + 'Error').classList.remove('show');
-    }
-
-    function showError(message) {
-        const alertError = document.getElementById('alertError');
-        document.getElementById('errorMessage').textContent = message;
-        alertError.classList.add('show');
-        setTimeout(function () { alertError.classList.remove('show'); }, 5000);
-    }
-
-    function showSuccess(message) {
-        const alertSuccess = document.getElementById('alertSuccess');
-        document.getElementById('successMessage').textContent = message;
-        alertSuccess.classList.add('show');
-        setTimeout(function () { alertSuccess.classList.remove('show'); }, 5000);
-    }
-
-    function togglePassword() {
-        const passwordInput = document.getElementById('password');
-        const toggleIcon    = document.getElementById('togglePassword');
-
-        if (passwordInput.type === 'password') {
-            passwordInput.type = 'text';
-            toggleIcon.classList.replace('fa-eye', 'fa-eye-slash');
-        } else {
-            passwordInput.type = 'password';
-            toggleIcon.classList.replace('fa-eye-slash', 'fa-eye');
-        }
-    }
-
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
-            20%, 40%, 60%, 80% { transform: translateX(10px); }
-        }
-    `;
-    document.head.appendChild(style);
-</script>
-
-</body>
-</html>
